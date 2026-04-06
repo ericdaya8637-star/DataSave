@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         数据库-可定制副本
 // @namespace    http://tampermonkey.net/
-// @version      1.3
+// @version      1.4
 // @description  为不同的角色卡提供独立的、使用不同默认模板的数据库。通过修改 @name 和 UNIQUE_SCRIPT_ID 来创建互不干扰的副本。
 // @author       Cline (AI Assisted)
 // @match        */*
@@ -21069,22 +21069,15 @@ const DatabaseAPI_ACU = {
                             </div>
                         </div>
 
-                        <h3>数据管理 (游玩数据)</h3>
-                        <p class="notes">导入/导出【当前聊天室】的实况游玩存檔，不影响模板。</p>
-                        <div class="button-group acu-data-mgmt-buttons acu-cols-2">
-                            <button id="${SCRIPT_ID_PREFIX_ACU}-import-json-data" style="color:#4ad19f; border-color:rgba(74, 209, 159, 0.4); background:rgba(74, 209, 159, 0.1) !important;">📥 导入游玩数据</button>
-                            <button id="${SCRIPT_ID_PREFIX_ACU}-export-json-data" style="color:#4ad19f; border-color:rgba(74, 209, 159, 0.4); background:rgba(74, 209, 159, 0.1) !important;">📦 导出游玩数据</button>
-                        </div>
-                        
-                        <hr style="border-color: var(--border-normal); margin: 15px 0;">
-                        
-                        <h3>模板管理 (系统蓝图)</h3>
-                        <p class="notes">管理系统底层的空表蓝图。会影响未来新开的对话。</p>
+                        <h3>数据管理</h3>
+                        <p class="notes">导入/导出当前对话的数据库，或管理全局模板。</p>
                         <div class="button-group acu-data-mgmt-buttons acu-cols-2">
                             <button id="${SCRIPT_ID_PREFIX_ACU}-import-combined-settings" class="primary">合并导入(模板+指令)</button>
                             <button id="${SCRIPT_ID_PREFIX_ACU}-export-combined-settings" class="primary">合并导出(模板+指令)</button>
                         </div>
-                        <div class="button-group acu-data-mgmt-buttons acu-cols-3" style="margin-top: 10px;">
+                        <hr style="border-color: var(--border-normal); margin: 15px 0;">
+                        <div class="button-group acu-data-mgmt-buttons acu-cols-3">
+                            <button id="${SCRIPT_ID_PREFIX_ACU}-export-json-data">导出JSON数据</button>
                             <button id="${SCRIPT_ID_PREFIX_ACU}-reset-template">恢复默认模板</button>
                             <button id="${SCRIPT_ID_PREFIX_ACU}-reset-all-defaults" class="btn-warning">恢复默认模板及提示词</button>
                             <button id="${SCRIPT_ID_PREFIX_ACU}-override-with-template" class="btn-danger">模板覆盖最新层数据</button>
@@ -21098,10 +21091,10 @@ const DatabaseAPI_ACU = {
                                         <option value="">（选择预设以切换）</option>
                                     </select>
                                     <button id="${SCRIPT_ID_PREFIX_ACU}-import-template" class="acu-mini-btn" title="导入模板（自动按文件名保存为预设，重名覆盖）">
-                                        <i class="fa-solid fa-file-import"></i><span style="color:#ffb85c;">导入模板表格</span>
+                                        <i class="fa-solid fa-file-import"></i><span>导入</span>
                                     </button>
                                     <button id="${SCRIPT_ID_PREFIX_ACU}-export-template" class="acu-mini-btn" title="导出模板（优先导出当前选中的预设）">
-                                        <i class="fa-solid fa-file-export"></i><span style="color:#ffb85c;">导出模板表格</span>
+                                        <i class="fa-solid fa-file-export"></i><span>导出</span>
                                     </button>
                                 </div>
                                 <div class="acu-template-preset-actions">
@@ -21853,7 +21846,6 @@ const DatabaseAPI_ACU = {
       const $templatePresetRenameBtn_ACU = $popupInstance_ACU.find(`#${SCRIPT_ID_PREFIX_ACU}-template-preset-rename`);
       const $templatePresetDeleteBtn_ACU = $popupInstance_ACU.find(`#${SCRIPT_ID_PREFIX_ACU}-template-preset-delete`);
       const $resetAllDefaultsButton_ACU = $popupInstance_ACU.find(`#${SCRIPT_ID_PREFIX_ACU}-reset-all-defaults`);
-      const $importJsonDataButton_ACU = $popupInstance_ACU.find(`#${SCRIPT_ID_PREFIX_ACU}-import-json-data`);
       const $exportJsonDataButton_ACU = $popupInstance_ACU.find(`#${SCRIPT_ID_PREFIX_ACU}-export-json-data`);
       const $importCombinedSettingsButton = $popupInstance_ACU.find(`#${SCRIPT_ID_PREFIX_ACU}-import-combined-settings`);
       const $exportCombinedSettingsButton = $popupInstance_ACU.find(`#${SCRIPT_ID_PREFIX_ACU}-export-combined-settings`);
@@ -22737,7 +22729,6 @@ const DatabaseAPI_ACU = {
             });
         }
         if ($resetAllDefaultsButton_ACU.length) $resetAllDefaultsButton_ACU.on('click', resetAllToDefaults_ACU);
-        if ($importJsonDataButton_ACU.length) $importJsonDataButton_ACU.on('click', importCurrentJsonData_ACU);
         if ($exportJsonDataButton_ACU.length) $exportJsonDataButton_ACU.on('click', exportCurrentJsonData_ACU);
 
         // [新增] 模板覆盖最新层数据按钮绑定
@@ -28343,34 +28334,6 @@ async function callCustomOpenAI_ACU(dynamicContent, abortController = null, opti
       }
   }
 
-  // [新增] 專門用於「導入遊玩數據」的函數（絕對不碰模板，只覆蓋當前聊天實況）
-  function importCurrentJsonData_ACU() {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.json';
-      input.onchange = e => {
-          const file = e.target.files[0];
-          if (!file) return;
-
-          const reader = new FileReader();
-          reader.onload = async (readerEvent) => {
-              const content = readerEvent.target.result;
-              try {
-                  // 嚴格調用底層 API：只更新 currentJsonTableData_ACU 並存入聊天記錄
-                  const success = await topLevelWindow_ACU.AutoCardUpdaterAPI.importTableAsJson(content);
-                  if (success) {
-                      showToastr_ACU('success', '游玩数据已成功导入并覆盖当前聊天记录！(模板未受影响)');
-                  }
-              } catch (error) {
-                  logError_ACU('导入游玩数据失败:', error);
-                  showToastr_ACU('error', '导入游玩数据失败，请检查文件格式。');
-              }
-          };
-          reader.readAsText(file, 'UTF-8');
-      };
-      input.click();
-  }
-
   function exportCurrentJsonData_ACU() {
     if (!currentJsonTableData_ACU) {
         showToastr_ACU('warning', '没有可导出的数据库。请先开始一个对话。');
@@ -31296,11 +31259,12 @@ async function callCustomOpenAI_ACU(dynamicContent, abortController = null, opti
                           hasChanges = true;
                       }
 
-                      // [修復] 同步整個 content 陣列（包含表頭與被清空的資料行）
-                      if (currentTable.content && Array.isArray(currentTable.content)) {
-                          // 比較整個表格內容（包含行數變化），如果不一樣就覆寫
-                          if (JSON.stringify(currentTable.content) !== JSON.stringify(templateTable.content)) {
-                              templateTable.content = JSON.parse(JSON.stringify(currentTable.content));
+                      // Update headers (content[0])
+                      if (currentTable.content && Array.isArray(currentTable.content) && currentTable.content.length > 0) {
+                          const currentHeaders = currentTable.content[0];
+                          const templateHeaders = templateTable.content[0];
+                          if (JSON.stringify(currentHeaders) !== JSON.stringify(templateHeaders)) {
+                              templateTable.content[0] = JSON.parse(JSON.stringify(currentHeaders));
                               hasChanges = true;
                           }
                       }
