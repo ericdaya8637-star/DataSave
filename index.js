@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         数据库-可定制副本
 // @namespace    http://tampermonkey.net/
-// @version      1.2
+// @version      1.3
 // @description  为不同的角色卡提供独立的、使用不同默认模板的数据库。通过修改 @name 和 UNIQUE_SCRIPT_ID 来创建互不干扰的副本。
 // @author       Cline (AI Assisted)
 // @match        */*
